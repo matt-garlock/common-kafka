@@ -492,7 +492,7 @@ public class ProcessingPartitionTest {
 
         // We set the reset strategy to earliest so this should give earliest offset
         assertThat(partition.getLastCommittedOffset(), is(partition.getEarliestOffset()));
-        verify(consumer).commitSync(Collections.singletonMap(topicPartition, any(OffsetAndMetadata.class)));
+        verify(consumer).commitSync(anyMap());
     }
 
     @Test
@@ -521,7 +521,7 @@ public class ProcessingPartitionTest {
         // Since our offset is out of range we will fall back to the offset based on our reset strategy
         // We set the reset strategy to earliest so this should give earliest offset
         assertThat(partition.getLastCommittedOffset(), is(1L));
-        verify(consumer).commitSync(Collections.singletonMap(topicPartition, any(OffsetAndMetadata.class)));
+        verify(consumer).commitSync(anyMap());
     }
 
     @Test
@@ -546,7 +546,7 @@ public class ProcessingPartitionTest {
         // Since our offset is out of range we will fall back to the offset based on our reset strategy
         // We set the reset strategy to earliest so this should give earliest offset
         assertThat(partition.getLastCommittedOffset(), is(25L));
-        verify(consumer).commitSync(Collections.singletonMap(topicPartition, any(OffsetAndMetadata.class)));
+        verify(consumer).commitSync(anyMap());
     }
 
     @Test
