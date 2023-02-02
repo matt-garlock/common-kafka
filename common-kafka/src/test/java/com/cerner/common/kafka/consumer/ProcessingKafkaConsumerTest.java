@@ -5,17 +5,10 @@ import static org.hamcrest.Matchers.empty;
 import static org.hamcrest.core.Is.is;
 import static org.hamcrest.core.IsInstanceOf.instanceOf;
 import static org.hamcrest.core.IsNull.nullValue;
-import static org.junit.Assert.assertThat;
-import static org.mockito.Matchers.any;
-import static org.mockito.Matchers.anyLong;
-import static org.mockito.Matchers.anyMap;
-import static org.mockito.Matchers.eq;
-import static org.mockito.Mockito.atLeastOnce;
-import static org.mockito.Mockito.mock;
-import static org.mockito.Mockito.never;
-import static org.mockito.Mockito.times;
-import static org.mockito.Mockito.verify;
-import static org.mockito.Mockito.when;
+import static org.hamcrest.MatcherAssert.assertThat;
+import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.mockito.ArgumentMatchers.*;
+import static org.mockito.Mockito.*;
 
 import java.io.IOException;
 import java.time.Duration;
@@ -43,18 +36,17 @@ import org.apache.kafka.clients.consumer.OffsetResetStrategy;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.serialization.Deserializer;
 import org.apache.kafka.common.serialization.StringDeserializer;
-import org.junit.Assert;
-import org.junit.Before;
-import org.junit.Test;
-import org.junit.runner.RunWith;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Captor;
 import org.mockito.Mock;
-import org.mockito.runners.MockitoJUnitRunner;
 
 import com.cerner.common.kafka.consumer.ProcessingPartitionTest.MockProcessingPartition;
+import org.mockito.junit.jupiter.MockitoExtension;
 
-@RunWith(MockitoJUnitRunner.class)
+@ExtendWith(MockitoExtension.class)
 @SuppressWarnings("unchecked")
 public class ProcessingKafkaConsumerTest {
 
@@ -85,7 +77,7 @@ public class ProcessingKafkaConsumerTest {
     ConsumerRecord<String, String> record5;
     ConsumerRecord<String, String> record6;
 
-    @Before
+    @BeforeEach
     public void before() {
         topicPartition = new TopicPartition(topic, partition);
         topicPartitions = Collections.singleton(topicPartition);
@@ -112,7 +104,8 @@ public class ProcessingKafkaConsumerTest {
         thirdSetMap.put(new TopicPartition(record6.topic(), record6.partition()), Arrays.asList(record6));
         ConsumerRecords<String, String> thirdSet = new ConsumerRecords<>(thirdSetMap);
 
-        when(consumer.poll(any(Duration.class))).thenReturn(firstSet).thenReturn(secondSet).thenReturn(thirdSet);
+        // This stubbing is set to lenient and included here because it is needed for 24 of the test cases
+        lenient().when(consumer.poll(any(Duration.class))).thenReturn(firstSet).thenReturn(secondSet).thenReturn(thirdSet);
         when(consumer.committed(topicPartition)).thenReturn(new OffsetAndMetadata(offset));
         when(consumer.committed(new TopicPartition(record4.topic(), record4.partition())))
                 .thenReturn(new OffsetAndMetadata(record4.offset()));
@@ -136,14 +129,18 @@ public class ProcessingKafkaConsumerTest {
         rebuildConsumer();
     }
 
-    @Test(expected = IllegalArgumentException.class)
+    @Test
     public void constructorWithConsumer_nullConfig() {
-        new ProcessingKafkaConsumer(null, consumer);
+        assertThrows(IllegalArgumentException.class,
+                () -> new ProcessingKafkaConsumer(null, consumer),
+                "Expected ProcessingKafkaConsumer constructor to throw IllegalArgumentException, but one was not thrown.");
     }
 
-    @Test(expected = IllegalArgumentException.class)
+    @Test
     public void constructor_nullConsumer() {
-        new ProcessingKafkaConsumer(config, null);
+        assertThrows(IllegalArgumentException.class,
+                () -> new ProcessingKafkaConsumer(config, null),
+                "Expected ProcessingKafkaConsumer constructor to throw IllegalArgumentException, but one was not thrown.");
     }
 
     @Test
@@ -153,9 +150,11 @@ public class ProcessingKafkaConsumerTest {
         }
     }
 
-    @Test(expected = IllegalArgumentException.class)
+    @Test
     public void constructorWithoutConsumer_nullConfig() {
-            new ProcessingKafkaConsumer(null);
+        assertThrows(IllegalArgumentException.class,
+                () -> new ProcessingKafkaConsumer( null),
+                "Expected ProcessingKafkaConsumer constructor to throw IllegalArgumentException, but one was not thrown.");
     }
 
     @Test
@@ -167,11 +166,8 @@ public class ProcessingKafkaConsumerTest {
     public void constructorWithDeserializers_nullConfig() {
         Deserializer<String> keyDeserializer = new StringDeserializer();
         Deserializer<String> valueDeserializer = new StringDeserializer();
-        try {
-            new ProcessingKafkaConsumer(null, keyDeserializer, valueDeserializer);
-            Assert.fail("Expected IllegalArgumentException to be thrown");
-        } catch (IllegalArgumentException e) {
-        }
+        assertThrows(IllegalArgumentException.class,
+                () -> new ProcessingKafkaConsumer(null, keyDeserializer, valueDeserializer));
     }
 
     @Test
@@ -300,16 +296,20 @@ public class ProcessingKafkaConsumerTest {
         assertThat(processingConsumer.nextRecord(POLL_TIME), is(Optional.empty()));
     }
 
-    @Test(expected = IllegalStateException.class)
+    @Test
     public void nextRecord_unexpectedException() {
         when(consumer.poll(any(Duration.class))).thenThrow(new IllegalStateException());
         when(consumer.subscription()).thenReturn(Collections.singleton("some.topic"));
-        processingConsumer.nextRecord(POLL_TIME);
+        assertThrows(IllegalStateException.class,
+                () -> processingConsumer.nextRecord(POLL_TIME),
+                "Expected ProcessingKafkaConsumer constructor to throw IllegalStateException, but one was not thrown.");
     }
 
-    @Test(expected = IllegalArgumentException.class)
+    @Test
     public void ack_nullTopicPartition() {
-        processingConsumer.ack(null, 0);
+        assertThrows(IllegalArgumentException.class,
+                () -> processingConsumer.ack(null, 0),
+                "Expected ProcessingConsumer.ack to throw IllegalArgumentException, but one was not thrown.");
     }
 
     @Test
@@ -365,24 +365,25 @@ public class ProcessingKafkaConsumerTest {
         verify(consumer).commitSync(Collections.singletonMap(topicPartition, new OffsetAndMetadata(offset + 1)));
     }
 
-    @Test(expected = IllegalArgumentException.class)
-    public void ack_topicPartitionIsNull() {
-        processingConsumer.ack(null, 0);
-    }
-
-    @Test(expected = IllegalArgumentException.class)
+    @Test
     public void ack_topicPartitionIsNull2() {
-        processingConsumer.ack(null);
+        assertThrows(IllegalArgumentException.class,
+                () -> processingConsumer.ack(null),
+                "Expected ProcessingConsumer.ack to throw IllegalArgumentException, but one was not thrown.");
     }
 
-    @Test(expected = IllegalArgumentException.class)
+    @Test
     public void fail_topicPartitionIsNull() {
-        processingConsumer.fail(null, 0);
+        assertThrows(IllegalArgumentException.class,
+                () -> processingConsumer.fail(null, 0),
+                "Expected ProcessingConsumer.fail to throw IllegalArgumentException, but one was not thrown.");
     }
 
-    @Test(expected = IllegalArgumentException.class)
+    @Test
     public void fail_topicPartitionIsNull2() {
-        processingConsumer.fail(null);
+        assertThrows(IllegalArgumentException.class,
+                () -> processingConsumer.fail(null),
+                "Expected ProcessingConsumer.fail to throw IllegalArgumentException, but one was not thrown.");
     }
 
     @Test
@@ -458,9 +459,11 @@ public class ProcessingKafkaConsumerTest {
         assertThat(processingConsumer.fail(invalidPartition), is(false));
     }
 
-    @Test(expected = IllegalArgumentException.class)
+    @Test
     public void resetOffsets_nullOffsets() {
-        processingConsumer.resetOffsets(null);
+        assertThrows(IllegalArgumentException.class,
+                () -> processingConsumer.resetOffsets(null),
+                "Expected ProcessingConsumer.resetOffsets to throw IllegalArgumentException, but one was not thrown.");
     }
 
     @Test

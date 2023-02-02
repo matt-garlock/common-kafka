@@ -8,9 +8,8 @@ import static org.hamcrest.Matchers.greaterThanOrEqualTo;
 import static org.hamcrest.Matchers.hasItem;
 import static org.hamcrest.Matchers.nullValue;
 import static org.hamcrest.core.Is.is;
-import static org.mockito.Matchers.any;
-import static org.mockito.Matchers.anyMap;
-import static org.mockito.Mockito.atLeast;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyMap;
 import static org.mockito.Mockito.atLeastOnce;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.never;
@@ -38,23 +37,18 @@ import org.apache.kafka.common.TopicPartition;
 import org.apache.log4j.AppenderSkeleton;
 import org.apache.log4j.spi.LoggingEvent;
 import org.apache.log4j.spi.RootLogger;
-import org.junit.After;
-import org.junit.Before;
-import org.junit.Rule;
-import org.junit.Test;
-import org.junit.rules.ExpectedException;
-import org.junit.runner.RunWith;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
-import org.mockito.runners.MockitoJUnitRunner;
+import org.mockito.junit.jupiter.MockitoExtension;
 
-@RunWith(MockitoJUnitRunner.class)
+@ExtendWith(MockitoExtension.class)
 @SuppressWarnings("unchecked")
 public class ProcessingPartitionTest {
 
     private TestLogAppender logAppender;
-
-    @Rule
-    public final ExpectedException exception = ExpectedException.none();
 
     @Mock
     Consumer<String, String> consumer;
@@ -64,7 +58,7 @@ public class ProcessingPartitionTest {
     TopicPartition topicPartition;
     MockProcessingPartition<String, String> partition;
 
-    @Before
+    @BeforeEach
     public void before() {
         properties = new Properties();
         properties.setProperty(ConsumerConfig.GROUP_ID_CONFIG, "my-group");
@@ -81,7 +75,7 @@ public class ProcessingPartitionTest {
         RootLogger.getRootLogger().addAppender(logAppender);
     }
 
-    @After
+    @AfterEach
     public void after() {
         RootLogger.getRootLogger().removeAppender(logAppender);
     }

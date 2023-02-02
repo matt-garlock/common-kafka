@@ -20,12 +20,14 @@ package com.cerner.common.kafka.testing;
 
 import kafka.server.KafkaConfig;
 import kafka.server.KafkaServer;
-import kafka.utils.ZKConfig;
+import kafka.server.QuorumTestHarness;
 import org.apache.commons.io.FileUtils;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.producer.ProducerConfig;
 import org.apache.kafka.common.utils.Time;
+import org.junit.jupiter.api.TestInfo;
 import scala.Option;
+import scala.collection.JavaConverters;
 
 import java.io.File;
 import java.io.IOException;
@@ -33,8 +35,6 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Properties;
 import java.util.stream.Collectors;
-
-import static scala.collection.JavaConversions.asJavaIterable;
 
 /**
  * A test harness that brings up some number of Kafka broker nodes.
@@ -44,7 +44,7 @@ import static scala.collection.JavaConversions.asJavaIterable;
  *
  * @author A. Olson
  */
-public class KafkaBrokerTestHarness extends ZookeeperTestHarness {
+public class KafkaBrokerTestHarness extends QuorumTestHarness {
 
     /**
      * Default number of brokers in the Kafka cluster.
@@ -121,7 +121,7 @@ public class KafkaBrokerTestHarness extends ZookeeperTestHarness {
      * @throws IllegalArgumentException if {@code brokerConfigs} is {@code null} or empty.
      */
     public KafkaBrokerTestHarness(final List<KafkaConfig> brokerConfigs, final int zookeeperPort, final String clusterId) {
-        super(zookeeperPort);
+        super();
         if (brokerConfigs == null || brokerConfigs.isEmpty()) {
             throw new IllegalArgumentException("Must supply at least one broker configuration.");
         }
@@ -148,14 +148,13 @@ public class KafkaBrokerTestHarness extends ZookeeperTestHarness {
      * @throws IllegalStateException if the Kafka broker cluster has already been {@link #setUp() setup}.
      */
     @Override
-    public void setUp() throws IOException {
+    public void setUp(TestInfo testInfo) {
         if (setUp) {
             throw new IllegalStateException("Already setup, cannot setup again");
         }
         setUp = true;
 
-        // Start up zookeeper.
-        super.setUp();
+        super.setUp(testInfo);
 
         startKafkaCluster();
     }
@@ -169,7 +168,7 @@ public class KafkaBrokerTestHarness extends ZookeeperTestHarness {
      * @throws IOException if an error occurs during Kafka broker shutdown.
      */
     @Override
-    public void tearDown() throws IOException {
+    public void tearDown() {
         if (!setUp) {
             throw new IllegalStateException("Not set up, cannot tear down");
         }
@@ -178,7 +177,11 @@ public class KafkaBrokerTestHarness extends ZookeeperTestHarness {
         }
         tornDown = true;
 
-        stopKafkaCluster();
+        try {
+            stopKafkaCluster();
+        } catch (IOException e) {
+            throw new RuntimeException(e);
+        }
 
         // Shutdown zookeeper
         super.tearDown();
@@ -216,7 +219,7 @@ public class KafkaBrokerTestHarness extends ZookeeperTestHarness {
         }
 
         for (KafkaServer broker : brokers) {
-            for (String logDir : asJavaIterable(broker.config().logDirs())) {
+            for (String logDir : JavaConverters.asJavaIterable(broker.config().logDirs())) {
                 FileUtils.deleteDirectory(new File(logDir));
             }
         }
@@ -226,8 +229,11 @@ public class KafkaBrokerTestHarness extends ZookeeperTestHarness {
 
 
     private String getBootstrapServers() {
+
         return brokerConfigs.stream()
-                .map(i -> i.hostName() + ":" + i.port())
+                .map(i->
+                        i.effectiveAdvertisedListeners().head().host() + ":" +
+                        i.effectiveAdvertisedListeners().head().port())
                 .collect(Collectors.joining(","));
     }
 
@@ -275,9 +281,6 @@ public class KafkaBrokerTestHarness extends ZookeeperTestHarness {
         Properties props = getProducerProps();
         props.putAll(getConsumerProps());
 
-        // Add zookeeper connect which can be used by KafkaAdminClient or other older clients
-        props.setProperty(ZKConfig.ZkConnectProp(), brokerConfigs.get(0).zkConnect());
-
         return props;
     }
 
@@ -316,9 +319,7 @@ public class KafkaBrokerTestHarness extends ZookeeperTestHarness {
             Properties props = new Properties();
             props.setProperty(KafkaConfig.ZkConnectProp(), "localhost:" + zookeeperPort);
             props.setProperty(KafkaConfig.BrokerIdProp(), String.valueOf(i + 1));
-            props.setProperty(KafkaConfig.AdvertisedHostNameProp(), "localhost");
-            props.setProperty(KafkaConfig.HostNameProp(), "localhost");
-            props.setProperty(KafkaConfig.PortProp(), String.valueOf(ports[i]));
+            props.setProperty(KafkaConfig.ListenersProp(), "PLAINTEXT://localhost:" + ports[i]);
             props.setProperty(KafkaConfig.LogDirProp(), KafkaTestUtils.getTempDir().getAbsolutePath());
             props.setProperty(KafkaConfig.LogFlushIntervalMessagesProp(), String.valueOf(1));
             props.setProperty(KafkaConfig.AutoCreateTopicsEnableProp(), String.valueOf(false));
@@ -339,8 +340,7 @@ public class KafkaBrokerTestHarness extends ZookeeperTestHarness {
     }
 
     private static KafkaServer startBroker(KafkaConfig config) {
-        KafkaServer server = new KafkaServer(config, Time.SYSTEM, Option.empty(),
-                new scala.collection.mutable.MutableList<>());
+        KafkaServer server = new KafkaServer(config, Time.SYSTEM, Option.empty(), false);
         server.startup();
         return server;
     }
