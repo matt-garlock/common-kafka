@@ -56,17 +56,19 @@ public class KafkaBrokerTestHarness extends QuorumTestHarness {
      */
     public static final int PARTITIONS_PER_TOPIC = 4;
 
-    private List<KafkaConfig> brokerConfigs;
+    private int numOfBrokers;
     private List<KafkaServer> brokers;
     private boolean setUp;
     private boolean tornDown;
     private String clusterId;
+    private Properties props;
+    private List<KafkaConfig> brokerConfigs;
 
     /**
      * Creates a new Kafka broker test harness using the {@link #DEFAULT_BROKERS default} number of brokers.
      */
     public KafkaBrokerTestHarness() {
-        this(DEFAULT_BROKERS, KafkaTestUtils.getPorts(1)[0]);
+        this(DEFAULT_BROKERS, new Properties());
     }
 
     /**
@@ -79,57 +81,50 @@ public class KafkaBrokerTestHarness extends QuorumTestHarness {
      *             if {@code properties} is {@code null}
      */
     public KafkaBrokerTestHarness(Properties properties) {
-        this(DEFAULT_BROKERS, KafkaTestUtils.getPorts(1)[0], properties);
+        this(DEFAULT_BROKERS, properties);
     }
 
     /**
      * Creates a new Kafka broker test harness using the given number of brokers and Zookeeper port.
      *
-     * @param brokers Number of Kafka brokers to start up.
-     * @param zookeeperPort The port number to use for Zookeeper client connections.
+     * @param numOfBrokers Number of Kafka brokers to start up.
      *
      * @throws IllegalArgumentException if {@code brokers} is less than 1.
      */
-    public KafkaBrokerTestHarness(int brokers, int zookeeperPort) {
-        this(getBrokerConfig(brokers, zookeeperPort), zookeeperPort, "");
+    public KafkaBrokerTestHarness(int numOfBrokers) {
+        this(numOfBrokers, "", new Properties());
     }
 
     /**
      * Creates a new Kafka broker test harness using the given number of brokers and Zookeeper port.
      *
-     * @param brokers
+     * @param numOfBrokers
      *            Number of Kafka brokers to start up.
-     * @param zookeeperPort
-     *            The port number to use for Zookeeper client connections.
      * @param properties
      *            the additional {@link Properties} supplied to the brokers.
      *
      * @throws IllegalArgumentException
      *             if {@code brokers} is less than 1 or if {@code baseProperties} is {@code null}
      */
-    public KafkaBrokerTestHarness(int brokers, int zookeeperPort, Properties properties) {
-        this(getBrokerConfig(brokers, zookeeperPort, properties), zookeeperPort, properties.getProperty("cluster.id", ""));
+    public KafkaBrokerTestHarness(int numOfBrokers, Properties properties) {
+        this(numOfBrokers, properties.getProperty("cluster.id", ""), properties);
     }
 
     /**
      * Creates a new Kafka broker test harness using the given broker configuration properties and Zookeeper port.
      *
-     * @param brokerConfigs List of Kafka broker configurations.
-     * @param zookeeperPort The port number to use for Zookeeper client connections.
      * @param clusterId the Kafka cluster id.
      *
-     * @throws IllegalArgumentException if {@code brokerConfigs} is {@code null} or empty.
      */
-    public KafkaBrokerTestHarness(final List<KafkaConfig> brokerConfigs, final int zookeeperPort, final String clusterId) {
+    public KafkaBrokerTestHarness(final int numOfBrokers, final String clusterId, final Properties properties) {
         super();
-        if (brokerConfigs == null || brokerConfigs.isEmpty()) {
-            throw new IllegalArgumentException("Must supply at least one broker configuration.");
-        }
-        this.brokerConfigs = brokerConfigs;
+        this.numOfBrokers = numOfBrokers;
         this.brokers = null;
         this.setUp = false;
         this.tornDown = false;
         this.clusterId = clusterId;
+        this.props = properties;
+        this.brokerConfigs = new ArrayList<>(numOfBrokers);
     }
 
     /**
@@ -145,7 +140,7 @@ public class KafkaBrokerTestHarness extends QuorumTestHarness {
      * Start up the Kafka broker cluster.
      *
      * @throws IOException if an error occurs during Kafka broker startup.
-     * @throws IllegalStateException if the Kafka broker cluster has already been {@link #setUp() setup}.
+     * @throws IllegalStateException if the Kafka broker cluster has already been {@link #setUp(TestInfo) setup}.
      */
     @Override
     public void setUp(TestInfo testInfo) {
@@ -156,15 +151,17 @@ public class KafkaBrokerTestHarness extends QuorumTestHarness {
 
         super.setUp(testInfo);
 
+        brokerConfigs.addAll(getBrokerConfig(numOfBrokers, this.zkPort(), props));
+
         startKafkaCluster();
     }
 
     /**
-     * Shutdown the Kafka broker cluster. Attempting to {@link #setUp()} a cluster again after calling this method is not allowed;
+     * Shutdown the Kafka broker cluster. Attempting to {@link #setUp(TestInfo)} a cluster again after calling this method is not allowed;
      * a new {@code KafkaBrokerTestHarness} must be created instead.
      *
      * @throws IllegalStateException if the Kafka broker cluster has already been {@link #tearDown() torn down} or has not been
-     *      {@link #setUp()}.
+     *      {@link #setUp(TestInfo)}.
      * @throws IOException if an error occurs during Kafka broker shutdown.
      */
     @Override
@@ -195,6 +192,8 @@ public class KafkaBrokerTestHarness extends QuorumTestHarness {
     public void startKafkaCluster() {
         if((brokers != null) && (!brokers.isEmpty()))
             throw new IllegalStateException("Kafka brokers are already running.");
+        if(brokerConfigs.isEmpty())
+            throw new IllegalStateException("Kafka broker configuration isn't found. Was setup() invoked yet?");
 
         brokers = new ArrayList<>(brokerConfigs.size());
         for (KafkaConfig config : brokerConfigs) {
@@ -291,7 +290,7 @@ public class KafkaBrokerTestHarness extends QuorumTestHarness {
      * @return configuration for a collection of brokers.
      * @throws IllegalArgumentException if {@code brokers} is less than 1
      */
-    public static List<KafkaConfig> getBrokerConfig(int brokers, int zookeeperPort) {
+    public List<KafkaConfig> getBrokerConfig(int brokers, int zookeeperPort) {
         return getBrokerConfig(brokers, zookeeperPort, new Properties());
     }
 
@@ -304,7 +303,7 @@ public class KafkaBrokerTestHarness extends QuorumTestHarness {
      * @return configuration for a collection of brokers.
      * @throws IllegalArgumentException if {@code brokers} is less than 1 or {@code properties} is {@code null}.
      */
-    public static List<KafkaConfig> getBrokerConfig(int brokers, int zookeeperPort, Properties properties) {
+    public List<KafkaConfig> getBrokerConfig(int brokers, int zookeeperPort, Properties properties) {
         if (brokers < 1) {
             throw new IllegalArgumentException("Invalid broker count: " + brokers);
         }

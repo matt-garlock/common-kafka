@@ -95,8 +95,7 @@ public abstract class AbstractKafkaTests {
     }
 
     public static void startKafka(Properties props) throws IOException {
-        int zookeeperPort = KafkaTestUtils.getPorts(1)[0];
-        kafka = new KafkaBrokerTestHarness(KafkaBrokerTestHarness.getBrokerConfig(1, zookeeperPort, props), zookeeperPort, "kafka");
+        kafka = new KafkaBrokerTestHarness(1,"kafka", props);
         kafka.setUp(new EmptyTestInfo());
     }
 

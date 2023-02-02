@@ -81,9 +81,8 @@ public class KafkaProducerWrapperTest {
 
     @BeforeEach
     public void setup(TestInfo testInfo){
-        testName = testInfo.getDisplayName();
+        testName = testInfo.getDisplayName().replaceAll("[^a-zA-Z0-9]", "-").trim();
         topicName = "topic_" + testName;
-        when(mockedProducer.send(ArgumentMatchers.any())).thenReturn(mockedFuture);
     }
 
     @Test
@@ -179,6 +178,7 @@ public class KafkaProducerWrapperTest {
 
     @Test
     public void test_flushFutureExecutionException() throws IOException, ExecutionException, InterruptedException {
+        when(mockedProducer.send(ArgumentMatchers.any())).thenReturn(mockedFuture);
         when(mockedFuture.get()).thenThrow(new ExecutionException("boom", new IllegalStateException()));
 
         KafkaProducerWrapper<String, String> producer = new KafkaProducerWrapper<>(mockedProducer);
@@ -228,6 +228,7 @@ public class KafkaProducerWrapperTest {
         long previousBatchSizeCount = KafkaProducerWrapper.BATCH_SIZE_HISTOGRAM.count();
         double previousBatchSizeSum = KafkaProducerWrapper.BATCH_SIZE_HISTOGRAM.sum();
 
+        when(mockedProducer.send(ArgumentMatchers.any())).thenReturn(mockedFuture);
         int batchSize = 10;
         KafkaProducerWrapper<String, String> producer = new KafkaProducerWrapper<>(mockedProducer);
 
